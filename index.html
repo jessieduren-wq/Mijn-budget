@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="nl">
+<head><link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#111827">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
+}
+</script>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>Mijn Budget</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f3f4f6;color:#111827}
+.app{max-width:520px;margin:auto;min-height:100vh;background:#f9fafb;padding-bottom:85px}
+header{background:#111827;color:white;padding:24px 20px 22px;border-radius:0 0 24px 24px}
+h1{margin:0;font-size:25px}.muted{opacity:.7;font-size:13px}.balance{font-size:34px;font-weight:800;margin-top:16px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px}
+.card{background:white;border-radius:17px;padding:16px;box-shadow:0 2px 10px #0000000b}
+.label{font-size:13px;color:#6b7280}.value{font-size:20px;font-weight:750;margin-top:5px}
+.green{color:#059669}.red{color:#dc2626}.blue{color:#2563eb}
+section{padding:0 16px 16px}.title{font-size:18px;font-weight:750;margin:5px 0 12px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #eef0f3}
+.row:last-child{border:0}.pill{font-size:12px;padding:5px 8px;border-radius:999px;background:#eef2ff;color:#4338ca}
+button{border:0;border-radius:13px;padding:12px 15px;font-weight:700;cursor:pointer}
+.primary{background:#111827;color:white}.secondary{background:#e5e7eb;color:#111827}.danger{color:#dc2626;background:#fee2e2}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.fab{position:fixed;bottom:18px;right:max(18px,calc((100vw - 520px)/2 + 18px));width:58px;height:58px;border-radius:50%;font-size:27px;background:#111827;color:white;box-shadow:0 8px 25px #0003}
+nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:auto;background:white;border-top:1px solid #e5e7eb;display:flex;justify-content:space-around;padding:9px 5px calc(9px + env(safe-area-inset-bottom));z-index:5}
+nav button{background:none;padding:5px;color:#6b7280;font-size:11px}nav button.active{color:#111827}
+.modal{display:none;position:fixed;inset:0;background:#0008;z-index:10;align-items:flex-end}.modal.show{display:flex}
+.sheet{background:white;width:100%;max-width:520px;margin:auto;border-radius:24px 24px 0 0;padding:20px}
+input,select{width:100%;padding:13px;border:1px solid #d1d5db;border-radius:12px;margin:6px 0 12px;font-size:16px}
+.small{font-size:12px;color:#6b7280}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="muted">Mijn Budget</div>
+  <h1>Goed overzicht, minder stress.</h1>
+  <div class="balance" id="balance">€ 0,00</div>
+  <div class="muted">beschikbaar saldo</div>
+</header>
+
+<div class="grid">
+  <div class="card"><div class="label">Inkomsten</div><div class="value green" id="income">€ 0,00</div></div>
+  <div class="card"><div class="label">Uitgaven</div><div class="value red" id="expenses">€ 0,00</div></div>
+  <div class="card"><div class="label">Nog te betalen</div><div class="value" id="planned">€ 0,00</div></div>
+  <div class="card"><div class="label">Slim dagbudget</div><div class="value blue" id="daily">€ 0,00</div></div>
+</div>
+
+<section>
+  <div class="title">🧠 Slim advies</div>
+  <div class="card" id="advice">Voeg je eerste inkomsten en uitgaven toe. Daarna bereken ik automatisch wat je veilig kunt besteden.</div>
+</section>
+
+<section>
+  <div class="title">💡 Kan ik dit betalen?</div>
+  <div class="card">
+    <input id="checkAmount" type="number" step="0.01" placeholder="Bedrag dat je wilt uitgeven (€)">
+    <button class="primary" onclick="canIAfford()">Controleren</button>
+    <div id="affordResult" style="margin-top:10px"></div>
+  </div>
+</section>
+
+<section>
+  <div class="title">📋 Slimme lijst</div>
+  <div class="card" id="list"><div class="small">Nog geen geplande betalingen.</div></div>
+</section>
+
+<section>
+  <div class="title">🔁 Vaste inkomsten & lasten</div>
+  <div class="card" id="recurring"><div class="small">Nog niets ingesteld.</div></div>
+</section>
+
+<section>
+  <div class="title">🎯 Spaardoel</div>
+  <div class="card">
+    <div class="row"><span id="goalName">Nog geen doel</span><b id="goalPct">0%</b></div>
+    <div class="small" id="goalText">Stel een spaardoel in via +</div>
+  </div>
+</section>
+
+<section>
+  <div class="title">Laatste transacties</div>
+  <div class="card" id="transactions"><div class="small">Nog geen transacties.</div></div>
+</section>
+
+<button class="fab" onclick="openModal()">+</button>
+<nav>
+ <button class="active">🏠<br>Overzicht</button>
+ <button onclick="openModal('income')">💰<br>Inkomsten</button>
+ <button onclick="openModal('expense')">💸<br>Uitgaven</button>
+ <button onclick="openModal('planned')">📅<br>Planning</button>
+</nav>
+</div>
+
+<div class="modal" id="modal">
+ <div class="sheet">
+  <div class="title">Toevoegen</div>
+  <label class="small">Type</label>
+  <select id="type"><option value="income">Inkomst</option><option value="expense">Uitgave</option><option value="planned">Geplande betaling</option><option value="recurringIncome">Vaste inkomsten</option><option value="recurringExpense">Vaste lasten</option><option value="goal">Spaardoel</option></select>
+  <input id="name" placeholder="Bijv. salaris, boodschappen, huur...">
+  <input id="amount" type="number" step="0.01" placeholder="Bedrag (€)">
+  <input id="date" type="date">
+  <div class="actions"><button class="primary" onclick="save()">Opslaan</button><button class="secondary" onclick="closeModal()">Annuleren</button></div>
+ </div>
+</div>
+
+<script>
+const KEY='mijn-budget-v1';
+let data=JSON.parse(localStorage.getItem(KEY)||'{"income":[],"expense":[],"planned":[],"recurringIncome":[],"recurringExpense":[],"goal":null}');
+const euro=n=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(n||0);
+function saveData(){localStorage.setItem(KEY,JSON.stringify(data));render()}
+function openModal(type){
+ document.getElementById('modal').classList.add('show');
+ if(type) document.getElementById('type').value=type;
+ document.getElementById('date').value=new Date().toISOString().slice(0,10);
+}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+function save(){
+ const type=document.getElementById('type').value, name=document.getElementById('name').value.trim(), amount=Number(document.getElementById('amount').value), date=document.getElementById('date').value;
+ if(!name||!amount){alert('Vul een naam en bedrag in.');return}
+ if(type==='goal') data.goal={name,amount,saved:0};
+ else if(type==='recurringIncome') data.recurringIncome.push({name,amount,date});
+ else if(type==='recurringExpense') data.recurringExpense.push({name,amount,date});
+ else data[type].push({name,amount,date});
+ ['name','amount'].forEach(x=>document.getElementById(x).value=''); closeModal(); saveData();
+}
+function canIAfford(){
+ const amount=Number(document.getElementById('checkAmount').value);
+ const inc=data.income.reduce((a,x)=>a+x.amount,0)+data.recurringIncome.reduce((a,x)=>a+x.amount,0);
+ const exp=data.expense.reduce((a,x)=>a+x.amount,0)+data.recurringExpense.reduce((a,x)=>a+x.amount,0);
+ const planned=data.planned.reduce((a,x)=>a+x.amount,0);
+ const available=inc-exp-planned;
+ const result=document.getElementById('affordResult');
+ if(!amount){result.innerHTML='<span class="small">Vul eerst een bedrag in.</span>';return}
+ if(amount<=available) result.innerHTML=`<b class="green">✅ Ja, dit past.</b><br><span class="small">Na deze uitgave blijft ongeveer ${euro(available-amount)} vrij.</span>`;
+ else result.innerHTML=`<b class="red">⚠️ Liever niet.</b><br><span class="small">Je komt ongeveer ${euro(amount-available)} tekort als je dit nu uitgeeft.</span>`;
+}
+function render(){
+ const inc=data.income.reduce((a,x)=>a+x.amount,0)+data.recurringIncome.reduce((a,x)=>a+x.amount,0), exp=data.expense.reduce((a,x)=>a+x.amount,0)+data.recurringExpense.reduce((a,x)=>a+x.amount,0), planned=data.planned.reduce((a,x)=>a+x.amount,0);
+ const bal=inc-exp, available=bal-planned;
+ document.getElementById('balance').textContent=euro(bal);
+ document.getElementById('income').textContent=euro(inc);
+ document.getElementById('expenses').textContent=euro(exp);
+ document.getElementById('planned').textContent=euro(planned);
+ const days=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate()-new Date().getDate()+1;
+ document.getElementById('daily').textContent=euro(Math.max(0,available/days));
+ let advice=available<0?'⚠️ Je geplande uitgaven zijn hoger dan je beschikbare saldo.':
+   available/days<20?'💡 Let op: je dagbudget is laag. Kijk of je ergens kunt besparen.':
+   '✅ Je staat er goed voor. Je kunt je vrije budget rustig over de resterende dagen verdelen.';
+ document.getElementById('advice').textContent=advice;
+ const list=document.getElementById('list');
+ list.innerHTML=data.planned.length?data.planned.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map((x,i)=>`<div class="row"><span>${x.name}<br><span class="small">${x.date||''}</span></span><b>${euro(x.amount)}</b></div>`).join(''):'<div class="small">Nog geen geplande betalingen.</div>';
+ const all=[...data.income.map(x=>({...x,t:'Inkomst'})),...data.expense.map(x=>({...x,t:'Uitgave'}))].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+ document.getElementById('transactions').innerHTML=all.length?all.slice(0,8).map(x=>`<div class="row"><span>${x.name}<br><span class="small">${x.date||''} · ${x.t}</span></span><b class="${x.t==='Inkomst'?'green':'red'}">${x.t==='Inkomst'?'+':'-'}${euro(x.amount)}</b></div>`).join(''):'<div class="small">Nog geen transacties.</div>';
+ const rec=document.getElementById('recurring');
+ const ri=data.recurringIncome.map(x=>`<div class="row"><span>💰 ${x.name}<br><span class="small">Vaste inkomsten</span></span><b class="green">+${euro(x.amount)}</b></div>`).join('');
+ const re=data.recurringExpense.map(x=>`<div class="row"><span>📌 ${x.name}<br><span class="small">Vaste last</span></span><b class="red">-${euro(x.amount)}</b></div>`).join('');
+ rec.innerHTML=(ri+re)||'<div class="small">Nog niets ingesteld. Gebruik + om vaste inkomsten of lasten toe te voegen.</div>';
+
+ const g=data.goal;
+ if(g){const pct=Math.min(100,Math.round((g.saved/g.amount)*100));document.getElementById('goalName').textContent='🎯 '+g.name;document.getElementById('goalPct').textContent=pct+'%';document.getElementById('goalText').textContent=`${euro(g.saved)} van ${euro(g.amount)} gespaard · nog ${euro(Math.max(0,g.amount-g.saved))}`;}
+}
+render();
+</script>
+</body></html>
